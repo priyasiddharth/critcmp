@@ -48,6 +48,10 @@ harness and then compare them. For example:
     $ cargo bench -- --save-baseline change
     $ critcmp before change
 
+When exactly two baselines are compared, `critcmp` also computes a two-tailed
+Welch t-test and reports the resulting p-value to help assess statistical
+significance of the timing difference.
+
 Filtering can be done with the -f/--filter flag to limit comparisons based on
 a regex:
 

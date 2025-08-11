@@ -153,6 +153,15 @@ impl Benchmark {
         self.estimates.std_dev.point_estimate
     }
 
+    pub fn sample_size(&self) -> Option<f64> {
+        let stddev = self.estimates.std_dev.point_estimate;
+        let stderr = self.estimates.mean.standard_error;
+        if stderr == 0.0 {
+            return None;
+        }
+        Some((stddev / stderr).powi(2))
+    }
+
     pub fn fullname(&self) -> &str {
         &self.fullname
     }
