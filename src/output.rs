@@ -4,6 +4,8 @@ use std::iter;
 use termcolor::{Color, ColorSpec, WriteColor};
 use unicode_width::UnicodeWidthStr;
 
+use statrs::distribution::{ContinuousCDF, StudentsT};
+
 use crate::data;
 use crate::Result;
 
@@ -19,6 +21,7 @@ pub struct Benchmark {
     name: String,
     nanoseconds: f64,
     stddev: Option<f64>,
+    samples: Option<f64>,
     throughput: Option<data::Throughput>,
     /// Whether this is the best benchmark in a group. This is only populated
     /// when a `Comparison` is built.
@@ -68,6 +71,13 @@ impl Comparison {
     fn get(&self, name: &str) -> Option<&Benchmark> {
         self.name_to_index.get(name).and_then(|&i| self.benchmarks.get(i))
     }
+
+    pub fn welch_p_value(&self) -> Option<f64> {
+        if self.benchmarks.len() != 2 {
+            return None;
+        }
+        welch_p_value(&self.benchmarks[0], &self.benchmarks[1])
+    }
 }
 
 impl Benchmark {
@@ -76,6 +86,7 @@ impl Benchmark {
             name: b.fullname().to_string(),
             nanoseconds: b.nanoseconds(),
             stddev: Some(b.stddev()),
+            samples: b.sample_size(),
             throughput: b.throughput(),
             best: false,
             rank: 0.0,
@@ -97,10 +108,14 @@ pub fn columns<W: WriteColor>(
             columns.insert(b.name.to_string());
         }
     }
+    let show_p = columns.len() == 2;
 
     write!(wtr, "group")?;
     for column in &columns {
         write!(wtr, "\t  {}", column)?;
+    }
+    if show_p {
+        write!(wtr, "\t  p-value")?;
     }
     writeln!(wtr, "")?;
 
@@ -108,6 +123,10 @@ pub fn columns<W: WriteColor>(
     for column in &columns {
         write!(wtr, "\t  ")?;
         write_divider(&mut wtr, '-', column.width())?;
+    }
+    if show_p {
+        write!(wtr, "\t  ")?;
+        write_divider(&mut wtr, '-', "p-value".width())?;
     }
     writeln!(wtr, "")?;
 
@@ -142,9 +161,41 @@ pub fn columns<W: WriteColor>(
                 wtr.reset()?;
             }
         }
+        if show_p {
+            if let Some(p) = group.welch_p_value() {
+                write!(wtr, "\t  {:<5.3}", p)?;
+            } else {
+                write!(wtr, "\t")?;
+            }
+        }
         writeln!(wtr, "")?;
     }
     Ok(())
+}
+
+fn welch_p_value(a: &Benchmark, b: &Benchmark) -> Option<f64> {
+    let (m1, m2) = (a.nanoseconds, b.nanoseconds);
+    let (s1, s2) = (a.stddev?, b.stddev?);
+    let (n1, n2) = (a.samples?, b.samples?);
+    if n1 <= 1.0 || n2 <= 1.0 {
+        return None;
+    }
+    let s1_sq = s1.powi(2);
+    let s2_sq = s2.powi(2);
+    let t_denom = (s1_sq / n1 + s2_sq / n2).sqrt();
+    if t_denom == 0.0 {
+        return None;
+    }
+    let t = (m1 - m2) / t_denom;
+    let df_num = (s1_sq / n1 + s2_sq / n2).powi(2);
+    let df_den = (s1_sq.powi(2) / ((n1 - 1.0) * n1.powi(2)))
+        + (s2_sq.powi(2) / ((n2 - 1.0) * n2.powi(2)));
+    if df_den == 0.0 {
+        return None;
+    }
+    let df = df_num / df_den;
+    let dist = StudentsT::new(0.0, 1.0, df).ok()?;
+    Some(2.0 * (1.0 - dist.cdf(t.abs())))
 }
 
 pub fn rows<W: WriteColor>(mut wtr: W, groups: &[Comparison]) -> Result<()> {
@@ -176,6 +227,9 @@ fn rows_one<W: WriteColor>(mut wtr: W, group: &Comparison) -> Result<()> {
             time(b.nanoseconds, b.stddev),
             throughput(b.throughput),
         )?;
+    }
+    if let Some(p) = group.welch_p_value() {
+        writeln!(wtr, "Welch p-value:\t{:.3}", p)?;
     }
     Ok(())
 }
@@ -233,5 +287,31 @@ fn throughput_per(per: f64, unit: &str) -> String {
         format!("{:.1} M{}/sec", (per / (1 << 20) as f64), unit)
     } else {
         format!("{:.1} G{}/sec", (per / (1 << 30) as f64), unit)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bm(mean: f64, stddev: f64, samples: f64) -> Benchmark {
+        Benchmark {
+            name: String::new(),
+            nanoseconds: mean,
+            stddev: Some(stddev),
+            samples: Some(samples),
+            throughput: None,
+            best: false,
+            rank: 0.0,
+        }
+    }
+
+    #[test]
+    fn welch_p_value_known_case() {
+        let a = bm(10.0, 1.0, 10.0);
+        let b = bm(12.0, 1.0, 10.0);
+        let p = super::welch_p_value(&a, &b).unwrap();
+        let expected = 0.000294564155366661f64;
+        assert!((p - expected).abs() < 1e-12);
     }
 }
