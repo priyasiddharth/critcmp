@@ -314,4 +314,35 @@ mod tests {
         let expected = 0.000294564155366661f64;
         assert!((p - expected).abs() < 1e-12);
     }
+
+    #[test]
+    fn welch_p_value_identical_means() {
+        let a = bm(10.0, 1.0, 10.0);
+        let b = bm(10.0, 2.0, 10.0);
+        let p = super::welch_p_value(&a, &b).unwrap();
+        assert!((p - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn welch_p_value_symmetric() {
+        let a = bm(10.0, 1.0, 10.0);
+        let b = bm(12.0, 2.0, 15.0);
+        let p_ab = super::welch_p_value(&a, &b).unwrap();
+        let p_ba = super::welch_p_value(&b, &a).unwrap();
+        assert!((p_ab - p_ba).abs() < 1e-12);
+    }
+
+    #[test]
+    fn welch_p_value_insufficient_samples() {
+        let a = bm(10.0, 1.0, 1.0);
+        let b = bm(12.0, 1.0, 10.0);
+        assert!(super::welch_p_value(&a, &b).is_none());
+    }
+
+    #[test]
+    fn welch_p_value_zero_stddev() {
+        let a = bm(10.0, 0.0, 10.0);
+        let b = bm(12.0, 0.0, 10.0);
+        assert!(super::welch_p_value(&a, &b).is_none());
+    }
 }
