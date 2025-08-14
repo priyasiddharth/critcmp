@@ -29,6 +29,8 @@ pub struct Benchmark {
     pub info: CBenchmark,
     #[serde(rename = "criterion_estimates_v1")]
     pub estimates: CEstimates,
+    #[serde(skip)]
+    pub change: Option<CEstimates>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -141,8 +143,13 @@ impl Benchmark {
 
         let info = CBenchmark::from_path(parent.join("benchmark.json"))?;
         let estimates = CEstimates::from_path(path)?;
+        let change_path =
+            parent.parent().map(|p| p.join("change/estimates.json"));
+        let change = change_path
+            .filter(|p| p.exists())
+            .and_then(|p| CEstimates::from_path(p).ok());
         let fullname = format!("{}/{}", baseline, info.full_id);
-        Ok(Some(Benchmark { baseline, fullname, info, estimates }))
+        Ok(Some(Benchmark { baseline, fullname, info, estimates, change }))
     }
 
     pub fn nanoseconds(&self) -> f64 {
@@ -172,6 +179,10 @@ impl Benchmark {
 
     pub fn benchmark_name(&self) -> &str {
         &self.info.full_id
+    }
+
+    pub fn median_change(&self) -> Option<f64> {
+        self.change.as_ref().map(|c| c.median.point_estimate)
     }
 
     pub fn throughput(&self) -> Option<Throughput> {
