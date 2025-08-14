@@ -52,6 +52,12 @@ When exactly two baselines are compared, `critcmp` also computes a two-tailed
 Welch t-test and reports the resulting p-value to help assess statistical
 significance of the timing difference.
 
+If Criterion has already computed change estimates for your benchmarks, you can
+use them directly instead of having `critcmp` recompute differences. This is
+done with the `--use-critcmp-change-estimate` flag, which reads the
+`change/estimates.json` file emitted by Criterion and reports the median
+change.
+
 Filtering can be done with the -f/--filter flag to limit comparisons based on
 a regex:
 

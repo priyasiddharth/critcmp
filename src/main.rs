@@ -34,6 +34,25 @@ fn try_main() -> Result<()> {
     let args = Args::parse();
     let benchmarks = args.benchmarks()?;
 
+    if args.use_change_estimate() {
+        let mut changes = BTreeMap::new();
+        for base in benchmarks.by_baseline.values() {
+            for (name, bench) in &base.benchmarks {
+                if let Some(median) = bench.median_change() {
+                    changes.entry(name.clone()).or_insert(median);
+                }
+            }
+        }
+        if changes.is_empty() {
+            fail!("no change estimates found");
+        }
+        let mut stdout = io::stdout();
+        for (name, change) in changes {
+            writeln!(stdout, "{}\t{}", name, change)?;
+        }
+        return Ok(());
+    }
+
     if args.baselines() {
         let mut stdout = io::stdout();
         for baseline in benchmarks.by_baseline.keys() {

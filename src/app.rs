@@ -186,6 +186,10 @@ impl Args {
         Ok(Some(percent.parse()?))
     }
 
+    pub fn use_change_estimate(&self) -> bool {
+        self.0.is_present("use-critcmp-change-estimate")
+    }
+
     pub fn baselines(&self) -> bool {
         self.0.is_present("baselines")
     }
@@ -300,6 +304,10 @@ fn app() -> App<'static, 'static> {
                    this percentage are not shown. By default, all comparisons \
                    are shown. Example use: '-t 5' hides any comparisons with \
                    differences under 5%."))
+        .arg(Arg::with_name("use-critcmp-change-estimate")
+            .long("use-critcmp-change-estimate")
+            .help("Use Criterion's change/estimates.json for comparisons and \
+                   output the median change."))
         .arg(Arg::with_name("color")
             .long("color")
             .takes_value(true)
